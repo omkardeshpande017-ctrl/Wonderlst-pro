@@ -1,0 +1,56 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: wanderlust-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - wanderlust_mongo_data:/data/db
+
+  server:
+    build: ./server
+    container_name: wanderlust-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      MONGO_URI: mongodb://mongo:27017/wanderlust_pro
+      CLIENT_URL: http://localhost:5173
+      # Fine for local/demo use. For anything real, override this (e.g. in a
+      # docker-compose.override.yml) with your own long random string.
+      JWT_SECRET: dev_only_change_this_wanderlust_secret_key_123456789
+      JWT_EXPIRES_IN: 7d
+      COOKIE_EXPIRES_DAYS: "7"
+      # Optional — leave blank to use local disk storage under server/uploads
+      CLOUD_NAME:
+      CLOUD_API_KEY:
+      CLOUD_API_SECRET:
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    depends_on:
+      - mongo
+
+  client:
+    build: ./client
+    container_name: wanderlust-client
+    restart: unless-stopped
+    environment:
+      # Lets the Vite dev server (running inside this container) reach the
+      # backend over the Docker network by service name. The browser on
+      # your machine still talks to http://localhost:8080 directly for
+      # anything not proxied.
+      VITE_API_PROXY_TARGET: http://server:8080
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+
+volumes:
+  wanderlust_mongo_data:
