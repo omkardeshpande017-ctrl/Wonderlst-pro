@@ -24,9 +24,23 @@ connectDB();
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
+
+// CLIENT_URL may be a single origin or a comma separated list, so the same API
+// can serve local dev and the deployed frontend.
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, cb) => {
+      // Same-origin / curl / server-to-server requests have no Origin header
+      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+        return cb(null, true);
+      }
+      return cb(new Error(`CORS: ${origin} is not allowed`));
+    },
     credentials: true,
   })
 );

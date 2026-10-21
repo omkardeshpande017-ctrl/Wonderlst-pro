@@ -1,0 +1,29 @@
+# Deploy the API (Express) to Render — free tier friendly.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: wanderlust-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set these in the Render dashboard after the first deploy:
+      #   MONGO_URI  -> your MongoDB Atlas connection string
+      #   CLIENT_URL -> the deployed frontend origin (comma separated for several)
+      #   JWT_SECRET -> a long random string
+      - key: MONGO_URI
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: COOKIE_EXPIRES_DAYS
+        value: 7
