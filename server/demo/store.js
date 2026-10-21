@@ -229,6 +229,12 @@ const notifications = [
 ];
 
 const store = {
+  get _seq() {
+    return seq;
+  },
+  set _seq(value) {
+    seq = Number(value) || seq;
+  },
   users,
   listings,
   reviews,
@@ -240,9 +246,11 @@ const store = {
     seq += 1;
     return oid(seq);
   },
-  findUser: (predicate) => users.find(predicate),
-  findListing: (id) => listings.find((l) => l._id === String(id)),
-  findBooking: (id) => bookings.find((b) => b._id === String(id)),
+  // Always read through the live array: `store.listings` can be replaced
+  // (delete, or a restored snapshot), so a cached closure would go stale.
+  findUser: (predicate) => store.users.find(predicate),
+  findListing: (id) => store.listings.find((l) => String(l._id) === String(id)),
+  findBooking: (id) => store.bookings.find((b) => String(b._id) === String(id)),
   publicUser: (user) => {
     if (!user) return null;
     const { password, ...rest } = user;

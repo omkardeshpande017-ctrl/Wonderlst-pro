@@ -1,21 +1,67 @@
 // DEMO_MODE store (see ./store.js). Lets the deployed app run with no database.
+//
+// The demo data is persisted to a writable temp folder when the platform allows
+// it, so sign-ups, new listings and bookings survive more than one request even
+// when the serverless function runs on different instances.
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const store = require("./store");
 const upload = require("../middleware/upload");
 const { fileInfo } = require("../middleware/upload");
 
-// Multipart bodies (listing forms, QR uploads) are parsed here so the demo
-// router behaves exactly like the Mongoose one.
 const singleImage = upload.single("image");
 
 const DAY = 24 * 60 * 60 * 1000;
+const STATE_FILE = path.join(os.tmpdir(), "wanderlust-demo-state.json");
 
 const startOfDay = (d) => {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 };
+
+// ---------- persistence ----------
+const snapshot = () => ({
+  users: store.users,
+  listings: store.listings,
+  bookings: store.bookings,
+  notifications: store.notifications,
+  reviews: store.reviews,
+  seq: store._seq,
+  savedAt: new Date().toISOString(),
+});
+
+// Writes synchronously: on serverless platforms the process can be frozen
+// right after the response, so a deferred write would never land.
+const persist = () => {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(snapshot()));
+  } catch {
+    /* read-only filesystem: keep everything in memory */
+  }
+};
+
+try {
+  if (fs.existsSync(STATE_FILE)) {
+    const saved = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    if (saved && saved.users?.length && saved.listings?.length) {
+      store.users = saved.users;
+      store.listings = saved.listings;
+      store.bookings = saved.bookings || [];
+      store.notifications = saved.notifications || [];
+      store.reviews = saved.reviews || [];
+      store._seq = saved.seq || store._seq;
+      console.log(
+        `demo state restored from ${STATE_FILE} (${store.listings.length} listings, saved ${saved.savedAt})`
+      );
+    }
+  }
+} catch (err) {
+  console.warn("could not restore demo state:", err.message);
+}
 
 // ---------- helpers ----------
 const send = (res, status, body) => res.status(status).json(body);
@@ -51,6 +97,7 @@ const populateBooking = (booking, withPayment = false) => {
       location: listing.location,
       country: listing.country,
       price: listing.price,
+      category: listing.category,
     },
     guest: { _id: guest._id, username: guest.username, email: guest.email, phone: guest.phone },
     owner: { _id: owner._id, username: owner.username, email: owner.email, phone: owner.phone },
@@ -81,7 +128,11 @@ const auth = (req, res, next) => {
 const onlyRole = (role) => (req, res, next) =>
   req.user.role === role
     ? next()
-    : fail(res, 403, role === "owner" ? "Only owner accounts can do that" : "Only guest accounts can do that");
+    : fail(
+        res,
+        403,
+        role === "owner" ? "Only owner accounts can do that" : "Only guest accounts can do that"
+      );
 
 const respondWithToken = (user, status, res) => {
   res.cookie("token", signToken(user), {
@@ -101,8 +152,7 @@ const overlap = (listingId, checkIn, checkOut, excludeId) =>
   store.bookings.some(
     (b) =>
       b.listing === listingId &&
-      // a pending request also holds the dates, so two guests can't be approved
-      // for the same nights by mistake
+      // a pending request also holds the dates
       ["pending", "approved", "payment_submitted", "confirmed"].includes(b.status) &&
       b._id !== excludeId &&
       new Date(b.checkIn) < checkOut &&
@@ -115,7 +165,8 @@ function authRouter() {
 
   r.post("/register", (req, res) => {
     const { username, email, password, role, phone } = req.body || {};
-    if (!username || !email || !password) return fail(res, 400, "Username, email and password are required");
+    if (!username || !email || !password)
+      return fail(res, 400, "Username, email and password are required");
     if (password.length < 6) return fail(res, 400, "Password must be at least 6 characters");
     if (store.users.some((u) => u.email === String(email).toLowerCase()))
       return fail(res, 400, "An account with that email already exists");
@@ -136,6 +187,7 @@ function authRouter() {
       payment: { upiId: "", payeeName: "", qrCode: { url: "", filename: "" } },
     };
     store.users.push(user);
+    persist();
     respondWithToken(user, 201, res);
   });
 
@@ -152,31 +204,33 @@ function authRouter() {
     send(res, 200, { success: true, message: "Logged out" });
   });
 
-  r.get("/me", auth, (req, res) => send(res, 200, { success: true, user: store.publicUser(req.user) }));
+  r.get("/me", auth, (req, res) =>
+    send(res, 200, { success: true, user: store.publicUser(req.user) })
+  );
 
   return r;
 }
 
 function listingRouter() {
   const r = express.Router();
+  const Listing = require("../models/Listing");
 
   r.get("/filters", (req, res) =>
     send(res, 200, {
       success: true,
-      categories: require("../models/Listing").CATEGORIES,
-      amenities: require("../models/Listing").AMENITIES,
-      bookingTypes: require("../models/Listing").BOOKING_TYPES,
+      categories: Listing.CATEGORIES,
+      amenities: Listing.AMENITIES,
+      bookingTypes: Listing.BOOKING_TYPES,
       sorts: ["recommended", "newest", "price-asc", "price-desc", "rating"],
     })
   );
 
   r.get("/categories", (req, res) =>
-    send(res, 200, { success: true, categories: require("../models/Listing").CATEGORIES })
+    send(res, 200, { success: true, categories: Listing.CATEGORIES })
   );
 
   r.get("/stats", (req, res) => {
-    const avg =
-      store.reviews.reduce((s, r2) => s + r2.rating, 0) / (store.reviews.length || 1);
+    const avg = store.reviews.reduce((s, r2) => s + r2.rating, 0) / (store.reviews.length || 1);
     send(res, 200, {
       success: true,
       stats: {
@@ -206,7 +260,7 @@ function listingRouter() {
   r.get("/mine", auth, onlyRole("owner"), (req, res) => {
     const mine = store.listings
       .filter((l) => l.owner === req.user._id)
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .map(populateListing);
     send(res, 200, { success: true, count: mine.length, listings: mine });
   });
@@ -249,12 +303,13 @@ function listingRouter() {
     if (featured === "true") items = items.filter((l) => l.featured);
     if (amenities) {
       const list = String(amenities).split(",").filter(Boolean);
-      items = items.filter((l) => list.every((a) => l.amenities.includes(a)));
+      items = items.filter((l) => list.every((a) => (l.amenities || []).includes(a)));
     }
 
     const sorts = {
-      recommended: (a, b) => Number(b.featured) - Number(a.featured) || b.avgRating - a.avgRating,
-      newest: (a, b) => b.createdAt - a.createdAt,
+      recommended: (a, b) =>
+        Number(b.featured) - Number(a.featured) || b.avgRating - a.avgRating,
+      newest: (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       "price-asc": (a, b) => a.price - b.price,
       "price-desc": (a, b) => b.price - a.price,
       rating: (a, b) => b.avgRating - a.avgRating,
@@ -314,9 +369,6 @@ function listingRouter() {
 
   const saveListing = (req, res, existing) => {
     const b = req.body || {};
-    const categories = require("../models/Listing").CATEGORIES;
-    const amenities = require("../models/Listing").AMENITIES;
-
     if (!b.title || !b.description || !b.location || !b.country || b.price === undefined) {
       return fail(res, 400, "Title, description, location, country and price are required");
     }
@@ -326,9 +378,10 @@ function listingRouter() {
           .split(",")
           .map((a) => a.trim())
           .filter(Boolean);
-    const bad = amenityList.find((a) => !amenities.includes(a));
+    const bad = amenityList.find((a) => !Listing.AMENITIES.includes(a));
     if (bad) return fail(res, 400, `Unknown amenity: ${bad}`);
-    if (b.category && !categories.includes(b.category)) return fail(res, 400, "Unknown category");
+    if (b.category && !Listing.CATEGORIES.includes(b.category))
+      return fail(res, 400, "Unknown category");
 
     const data = {
       title: b.title,
@@ -352,6 +405,7 @@ function listingRouter() {
 
     if (existing) {
       Object.assign(existing, data);
+      persist();
       return send(res, 200, { success: true, listing: existing });
     }
     const listing = {
@@ -371,6 +425,7 @@ function listingRouter() {
       createdAt: new Date(),
     };
     store.listings.unshift(listing);
+    persist();
     return send(res, 201, { success: true, listing });
   };
 
@@ -390,6 +445,7 @@ function listingRouter() {
     if (listing.owner !== req.user._id)
       return fail(res, 403, "You don't have permission to delete this listing");
     store.listings = store.listings.filter((l) => l._id !== listing._id);
+    persist();
     send(res, 200, { success: true, message: "Listing deleted" });
   });
 
@@ -416,6 +472,7 @@ function listingRouter() {
     listing.avgRating =
       Math.round((listing.reviews.reduce((s, r2) => s + r2.rating, 0) / listing.reviews.length) * 10) /
       10;
+    persist();
     send(res, 201, {
       success: true,
       review: { ...review, author: { username: req.user.username, avatar: "" } },
@@ -438,6 +495,7 @@ function listingRouter() {
           (listing.reviews.reduce((s, r2) => s + r2.rating, 0) / listing.reviews.length) * 10
         ) / 10
       : 0;
+    persist();
     send(res, 200, { success: true, message: "Review deleted" });
   });
 
@@ -487,7 +545,8 @@ function bookingRouter() {
 
     const checkIn = startOfDay(req.body.checkIn);
     const checkOut = startOfDay(req.body.checkOut);
-    if (checkIn < startOfDay(new Date())) return fail(res, 400, "Check-in date can't be in the past");
+    if (checkIn < startOfDay(new Date()))
+      return fail(res, 400, "Check-in date can't be in the past");
     if (checkOut <= checkIn) return fail(res, 400, "Check-out must be after check-in");
     if (overlap(listing._id, checkIn, checkOut))
       return fail(res, 409, "Those dates are no longer available");
@@ -528,6 +587,7 @@ function bookingRouter() {
       read: false,
       createdAt: new Date(),
     });
+    persist();
     send(res, 201, { success: true, booking });
   });
 
@@ -563,7 +623,11 @@ function bookingRouter() {
             new Date(b.checkIn).getFullYear() === d.getFullYear()
         )
         .reduce((s, b) => s + b.totalPrice, 0);
-      monthly.push({ month: d.toLocaleString("en-IN", { month: "short" }), total });
+      monthly.push({
+        key: `${d.getFullYear()}-${d.getMonth()}`,
+        label: d.toLocaleString("en-IN", { month: "short" }),
+        total,
+      });
     }
     send(res, 200, {
       success: true,
@@ -589,11 +653,19 @@ function bookingRouter() {
   r.put("/:id/payment", onlyRole("guest"), upload.single("screenshot"), (req, res) => {
     const booking = store.findBooking(req.params.id);
     if (!booking) return fail(res, 404, "Booking not found");
-    if (booking.guest !== req.user._id) return fail(res, 403, "You don't have permission to do that");
+    if (booking.guest !== req.user._id)
+      return fail(res, 403, "You don't have permission to do that");
     if (booking.status !== "approved") return fail(res, 400, "There's nothing to pay right now");
 
     const txId = String((req.body && req.body.transactionId) || "").trim();
     if (txId.length < 6) return fail(res, 400, "Enter a valid transaction ID (6+ characters)");
+    if (
+      store.bookings.some(
+        (b) => b._id !== booking._id && b.payment?.transactionId === txId
+      )
+    ) {
+      return fail(res, 400, "That transaction ID was already used for another booking");
+    }
 
     booking.payment.status = "submitted";
     booking.payment.transactionId = txId;
@@ -601,17 +673,20 @@ function bookingRouter() {
     if (req.file) booking.payment.screenshot = fileInfo(req.file);
     booking.status = "payment_submitted";
     booking.updatedAt = new Date();
+    persist();
     send(res, 200, { success: true, booking });
   });
 
   const ownerAction = (allowed, mutate, message) => (req, res) => {
     const booking = store.findBooking(req.params.id);
     if (!booking) return fail(res, 404, "Booking not found");
-    if (booking.owner !== req.user._id) return fail(res, 403, "You don't have permission to do that");
+    if (booking.owner !== req.user._id)
+      return fail(res, 403, "You don't have permission to do that");
     if (!allowed.includes(booking.status))
       return fail(res, 400, `You can't do that while the booking is ${booking.status}`);
     mutate(booking, req);
     booking.updatedAt = new Date();
+    persist();
     send(res, 200, { success: true, booking, message });
   };
 
@@ -727,7 +802,8 @@ function bookingRouter() {
     if (!booking) return fail(res, 404, "Booking not found");
     const isGuest = booking.guest === req.user._id;
     const isOwner = booking.owner === req.user._id;
-    if (!isGuest && !isOwner) return fail(res, 403, "You don't have permission to cancel this booking");
+    if (!isGuest && !isOwner)
+      return fail(res, 403, "You don't have permission to cancel this booking");
     if (!["pending", "approved", "payment_submitted", "confirmed"].includes(booking.status))
       return fail(res, 400, "This booking can't be cancelled");
 
@@ -735,6 +811,7 @@ function bookingRouter() {
     booking.cancelledBy = isGuest ? "guest" : "owner";
     booking.decisionReason = (req.body?.reason || "").slice(0, 300);
     booking.updatedAt = new Date();
+    persist();
     send(res, 200, { success: true, booking });
   });
 
@@ -762,7 +839,13 @@ function userRouter() {
       wishlist: req.user.wishlist
         .map((id) => store.findListing(id))
         .filter(Boolean)
-        .map((l) => ({ _id: l._id, title: l.title, image: l.image, location: l.location, price: l.price })),
+        .map((l) => ({
+          _id: l._id,
+          title: l.title,
+          image: l.image,
+          location: l.location,
+          price: l.price,
+        })),
     };
     send(res, 200, { success: true, user: withWishlist });
   });
@@ -777,6 +860,7 @@ function userRouter() {
     if (bio !== undefined) req.user.bio = bio;
     if (phone !== undefined) req.user.phone = phone;
     if (avatar !== undefined) req.user.avatar = avatar;
+    persist();
     send(res, 200, { success: true, user: store.publicUser(req.user) });
   });
 
@@ -791,6 +875,7 @@ function userRouter() {
     if (payeeName !== undefined) req.user.payment.payeeName = String(payeeName).trim();
     if (req.file) req.user.payment.qrCode = fileInfo(req.file);
     if (req.body?.removeQr === "true") req.user.payment.qrCode = { url: "", filename: "" };
+    persist();
     send(res, 200, { success: true, user: store.publicUser(req.user) });
   });
 
@@ -811,6 +896,7 @@ function userRouter() {
       req.user.wishlist.splice(idx, 1);
       added = false;
     }
+    persist();
     send(res, 200, { success: true, added, wishlist: req.user.wishlist });
   });
 
@@ -836,12 +922,14 @@ function notificationRouter() {
     store.notifications.forEach((n) => {
       if (n.user === req.user._id) n.read = true;
     });
+    persist();
     send(res, 200, { success: true, unreadCount: 0 });
   });
 
   r.put("/:id/read", (req, res) => {
     const n = store.notifications.find((x) => x._id === req.params.id);
     if (n) n.read = true;
+    persist();
     send(res, 200, { success: true });
   });
 
