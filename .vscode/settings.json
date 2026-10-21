@@ -1,0 +1,13 @@
+{
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "emmet.includeLanguages": { "javascript": "javascriptreact" },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.logs": true
+  },
+  "files.exclude": {
+    "**/.DS_Store": true
+  }
+}

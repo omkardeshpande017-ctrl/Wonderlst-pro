@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. Start MongoDB",
+      "type": "shell",
+      "command": "brew services start mongodb-community",
+      "problemMatcher": []
+    },
+    {
+      "label": "2. API — install + run (nodemon)",
+      "type": "shell",
+      "command": "npm install && npm run dev",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "wanderlust", "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "3. Client — install + run (Vite)",
+      "type": "shell",
+      "command": "npm install && npm run dev",
+      "options": { "cwd": "${workspaceFolder}/client" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "wanderlust", "panel": "dedicated", "reveal": "always" }
+    },
+    {
+      "label": "4. Seed demo data",
+      "type": "shell",
+      "command": "npm run seed",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "problemMatcher": []
+    },
+    {
+      "label": "▶ Run Wanderlust (API + Client)",
+      "dependsOrder": "parallel",
+      "dependsOn": ["2. API — install + run (nodemon)", "3. Client — install + run (Vite)"],
+      "problemMatcher": []
+    },
+    {
+      "label": "⏹ Stop everything (free ports 8080/5173)",
+      "type": "shell",
+      "command": "lsof -ti:8080 | xargs kill 2>/dev/null; lsof -ti:5173 | xargs kill 2>/dev/null; echo stopped",
+      "problemMatcher": []
+    }
+  ]
+}
