@@ -54,7 +54,13 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// Keep raw multipart bodies available so routes can re-parse them with multer
+// (Express's json parser would otherwise swallow the stream).
+app.use((req, res, next) => {
+  const type = req.headers["content-type"] || "";
+  if (type.startsWith("multipart/form-data")) return next();
+  return express.json()(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(mongoSanitize());

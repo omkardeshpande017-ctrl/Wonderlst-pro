@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { FaStar, FaHeart, FaRegHeart, FaBolt } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext.jsx";
 import { inr } from "../utils/format.js";
+import SmartImage from "./SmartImage.jsx";
 
 export default function ListingCard({ listing, wishlist = [], onToggleWishlist, priority }) {
   const { user } = useAuth();
@@ -9,12 +10,14 @@ export default function ListingCard({ listing, wishlist = [], onToggleWishlist, 
 
   return (
     <article className="group relative animate-fade-up">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-ink-100">
-        <Link to={`/listings/${listing._id}`} aria-label={listing.title}>
-          <img
+      <div className="relative overflow-hidden rounded-2xl">
+        <Link to={`/listings/${listing._id}`} aria-label={listing.title} className="block">
+          <SmartImage
             src={listing.image?.url}
             alt={listing.title}
-            loading={priority ? "eager" : "lazy"}
+            category={listing.category}
+            priority={priority}
+            wrapperClassName="aspect-[4/3]"
             className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]"
           />
           <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/0 to-black/0 opacity-70" />

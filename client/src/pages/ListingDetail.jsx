@@ -17,6 +17,7 @@ import {
 import api from "../api/axios.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import ReviewCard from "../components/ReviewCard.jsx";
+import SmartImage from "../components/SmartImage.jsx";
 import StarRating from "../components/StarRating.jsx";
 import BookingWidget from "../components/BookingWidget.jsx";
 import { AMENITY_ICONS, inr, shortDate } from "../utils/format.js";
@@ -190,7 +191,15 @@ export default function ListingDetail() {
       {/* Gallery */}
       <div className="mt-6 grid gap-2 overflow-hidden rounded-3xl sm:grid-cols-[2fr_1fr]">
         <div className="relative aspect-[4/3] bg-ink-100 sm:aspect-auto sm:min-h-[420px]">
-          <img src={main?.url} alt={listing.title} className="h-full w-full object-cover" />
+          <SmartImage
+            key={main?.url}
+            src={main?.url}
+            alt={listing.title}
+            category={listing.category}
+            priority
+            wrapperClassName="absolute inset-0"
+            className="h-full w-full object-cover"
+          />
         </div>
         <div className="grid grid-cols-4 gap-2 sm:grid-cols-2">
           {photos.slice(0, 4).map((p, i) => (
@@ -201,7 +210,13 @@ export default function ListingDetail() {
                 activePhoto === i ? "ring-2 ring-ink-900 ring-offset-1" : "opacity-90 hover:opacity-100"
               }`}
             >
-              <img src={p.url} alt="" className="h-full w-full object-cover" />
+              <SmartImage
+                src={p.url}
+                alt={`${listing.title} photo ${i + 1}`}
+                category={listing.category}
+                wrapperClassName="absolute inset-0"
+                className="h-full w-full object-cover"
+              />
             </button>
           ))}
         </div>

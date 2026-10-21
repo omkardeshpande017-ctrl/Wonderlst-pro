@@ -88,7 +88,7 @@ module.exports = [
       "Spend the night inside a restored lakeside palace. Frescoed ceilings, a grand durbar hall, courtyards lit by lanterns and a butler on call — history you can actually sleep in.",
     image: { url: img("1533154683836-84ea7a0bc310") },
     gallery: [
-      { url: img("1585549426638-4a2f7e1b3c86") },
+      { url: img("1571896349842-33c89424de2d") },
       { url: img("1590523277543-a94d2e4eb00b") },
     ],
     price: 18000,
@@ -141,7 +141,7 @@ module.exports = [
     image: { url: img("1504280390367-361c6d9f38f4") },
     gallery: [
       { url: img("1478131143081-80f7f84ca84d") },
-      { url: img("1537565074781-b6dae0c4c5e7") },
+      { url: img("1476514525535-07fb3b4ae5f1") },
     ],
     price: 1800,
     cleaningFee: 200,
@@ -216,7 +216,7 @@ module.exports = [
     title: "Houseboat on the Backwaters",
     description:
       "Drift through Kerala's backwaters on a private houseboat with a crew, a chef and a sun deck. Every meal is freshly cooked onboard with the day's catch.",
-    image: { url: img("1592218350083-6a5a3d5c6b0b") },
+    image: { url: img("1499793983690-e29da59ef1c2") },
     gallery: [
       { url: img("1544551763-46a013bb70d5") },
       { url: img("1476514525535-07fb3b4ae5f1") },
@@ -268,7 +268,7 @@ module.exports = [
     title: "Heritage Haveli Suite",
     description:
       "A blue-city haveli with carved sandstone jaalis, a rooftop cafe and rooms that stay cool through the desert summer. Walking distance from the fort.",
-    image: { url: img("1585549426638-4a2f7e1b3c86") },
+    image: { url: img("1571896349842-33c89424de2d") },
     gallery: [
       { url: img("1590523277543-a94d2e4eb00b") },
       { url: img("1566073771259-6a8506099945") },

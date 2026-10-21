@@ -4,6 +4,7 @@ import { FaMapMarkerAlt, FaArrowRight } from "react-icons/fa";
 import api from "../api/axios.js";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { inr, shortDate } from "../utils/format.js";
+import SmartImage from "../components/SmartImage.jsx";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -112,10 +113,11 @@ export default function MyBookings() {
               to={`/bookings/${b._id}`}
               className="card flex flex-col gap-4 p-4 transition hover:shadow-lift sm:flex-row sm:items-center"
             >
-              <img
+              <SmartImage
                 src={b.listing?.image?.url}
-                alt=""
-                className="h-40 w-full shrink-0 rounded-xl object-cover sm:h-24 sm:w-32"
+                alt={b.listing?.title}
+                wrapperClassName="h-40 w-full shrink-0 rounded-xl sm:h-24 sm:w-32"
+                className="h-full w-full object-cover"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">

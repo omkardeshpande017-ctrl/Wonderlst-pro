@@ -135,7 +135,13 @@ export default function Home() {
             src="https://images.unsplash.com/photo-1602002418082-a4443e081dd1?q=80&w=2000&auto=format&fit=crop"
             alt=""
             className="h-full w-full object-cover"
+            onError={(e) => {
+              // keep the hero looking intentional if the photo can't load
+              e.currentTarget.style.display = "none";
+            }}
           />
+          {/* CSS-only backdrop behind the hero photo */}
+          <div className="absolute inset-0 -z-10 bg-gradient-to-br from-ink-900 via-ink-800 to-brand-900" />
           <div className="absolute inset-0 bg-gradient-to-b from-ink-950/70 via-ink-950/45 to-ink-950/75" />
         </div>
 

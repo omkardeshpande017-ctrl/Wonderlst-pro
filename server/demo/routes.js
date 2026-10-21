@@ -2,6 +2,12 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const store = require("./store");
+const upload = require("../middleware/upload");
+const { fileInfo } = require("../middleware/upload");
+
+// Multipart bodies (listing forms, QR uploads) are parsed here so the demo
+// router behaves exactly like the Mongoose one.
+const singleImage = upload.single("image");
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -342,7 +348,7 @@ function listingRouter() {
       instantBook: b.instantBook === true || b.instantBook === "true",
       updatedAt: new Date(),
     };
-    if (req.file) data.image = { url: `/uploads/${req.file.filename}`, filename: req.file.filename };
+    if (req.file) data.image = fileInfo(req.file);
 
     if (existing) {
       Object.assign(existing, data);
@@ -368,9 +374,9 @@ function listingRouter() {
     return send(res, 201, { success: true, listing });
   };
 
-  r.post("/", auth, onlyRole("owner"), (req, res) => saveListing(req, res, null));
+  r.post("/", auth, onlyRole("owner"), singleImage, (req, res) => saveListing(req, res, null));
 
-  r.put("/:id", auth, onlyRole("owner"), (req, res) => {
+  r.put("/:id", auth, onlyRole("owner"), singleImage, (req, res) => {
     const listing = store.findListing(req.params.id);
     if (!listing) return fail(res, 404, "Listing not found");
     if (listing.owner !== req.user._id)
@@ -580,7 +586,7 @@ function bookingRouter() {
     });
   });
 
-  r.put("/:id/payment", onlyRole("guest"), (req, res) => {
+  r.put("/:id/payment", onlyRole("guest"), upload.single("screenshot"), (req, res) => {
     const booking = store.findBooking(req.params.id);
     if (!booking) return fail(res, 404, "Booking not found");
     if (booking.guest !== req.user._id) return fail(res, 403, "You don't have permission to do that");
@@ -592,7 +598,7 @@ function bookingRouter() {
     booking.payment.status = "submitted";
     booking.payment.transactionId = txId;
     booking.payment.submittedAt = new Date();
-    if (req.file) booking.payment.screenshot = { url: `/uploads/${req.file.filename}`, filename: req.file.filename };
+    if (req.file) booking.payment.screenshot = fileInfo(req.file);
     booking.status = "payment_submitted";
     booking.updatedAt = new Date();
     send(res, 200, { success: true, booking });
@@ -774,7 +780,7 @@ function userRouter() {
     send(res, 200, { success: true, user: store.publicUser(req.user) });
   });
 
-  r.put("/me/payment", onlyRole("owner"), (req, res) => {
+  r.put("/me/payment", onlyRole("owner"), upload.single("qr"), (req, res) => {
     const { upiId, payeeName } = req.body || {};
     if (upiId !== undefined) {
       const trimmed = String(upiId).trim();
@@ -783,7 +789,7 @@ function userRouter() {
       req.user.payment.upiId = trimmed;
     }
     if (payeeName !== undefined) req.user.payment.payeeName = String(payeeName).trim();
-    if (req.file) req.user.payment.qrCode = { url: `/uploads/${req.file.filename}`, filename: req.file.filename };
+    if (req.file) req.user.payment.qrCode = fileInfo(req.file);
     if (req.body?.removeQr === "true") req.user.payment.qrCode = { url: "", filename: "" };
     send(res, 200, { success: true, user: store.publicUser(req.user) });
   });

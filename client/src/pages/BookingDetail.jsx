@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { FaMapMarkerAlt, FaCopy, FaQrcode } from "react-icons/fa";
 import api from "../api/axios.js";
 import StatusBadge from "../components/StatusBadge.jsx";
+import SmartImage from "../components/SmartImage.jsx";
 
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });

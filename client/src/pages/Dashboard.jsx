@@ -16,6 +16,7 @@ import ListingCard from "../components/ListingCard.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { inr, shortDate } from "../utils/format.js";
+import SmartImage from "../components/SmartImage.jsx";
 
 const STATUS_FILTERS = [
   { key: "", label: "All" },
@@ -233,10 +234,12 @@ export default function Dashboard() {
                   to={`/bookings/${b._id}`}
                   className="card flex items-center gap-4 p-4 transition hover:shadow-lift"
                 >
-                  <img
+                  <SmartImage
                     src={b.listing?.image?.url}
-                    alt=""
-                    className="h-20 w-24 shrink-0 rounded-xl object-cover"
+                    alt={b.listing?.title}
+                    category={b.listing?.category}
+                    wrapperClassName="h-20 w-24 shrink-0 rounded-xl"
+                    className="h-full w-full object-cover"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
