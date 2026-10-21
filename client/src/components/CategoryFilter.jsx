@@ -1,36 +1,29 @@
-const ICONS = {
-  All: "🌍",
-  Trending: "🔥",
-  Rooms: "🛏️",
-  "Iconic Cities": "🏙️",
-  Mountains: "⛰️",
-  Castles: "🏰",
-  "Amazing Pools": "🏊",
-  Camping: "🏕️",
-  Farms: "🚜",
-  Arctic: "🧊",
-  Boats: "⛵",
-  Beachfront: "🏖️",
-};
+import { CATEGORY_ICONS } from "../utils/format.js";
 
 export default function CategoryFilter({ categories, active, onChange }) {
   const all = ["All", ...categories];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex gap-6 overflow-x-auto no-scrollbar border-b border-gray-200">
-      {all.map((cat) => (
-        <button
-          key={cat}
-          onClick={() => onChange(cat)}
-          className={`flex flex-col items-center gap-1 text-xs font-medium shrink-0 pb-2 border-b-2 transition ${
-            active === cat
-              ? "border-gray-900 text-gray-900"
-              : "border-transparent text-gray-400 hover:text-gray-700"
-          }`}
-        >
-          <span className="text-xl">{ICONS[cat] || "📍"}</span>
-          {cat}
-        </button>
-      ))}
+    <div className="sticky top-16 z-30 border-b border-ink-100 bg-white/90 backdrop-blur-md">
+      <div className="container-page flex gap-2 overflow-x-auto py-3 no-scrollbar">
+        {all.map((cat) => {
+          const isActive = active === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => onChange(cat)}
+              className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold transition ${
+                isActive
+                  ? "border-ink-900 bg-ink-900 text-white"
+                  : "border-ink-200 text-ink-600 hover:border-ink-900 hover:text-ink-900"
+              }`}
+            >
+              <span className="text-base leading-none">{CATEGORY_ICONS[cat] || "📍"}</span>
+              {cat}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

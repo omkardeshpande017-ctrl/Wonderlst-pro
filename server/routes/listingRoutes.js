@@ -4,6 +4,11 @@ const router = express.Router();
 const {
   getListings,
   getCategories,
+  getFilterMeta,
+  getFeatured,
+  getStats,
+  getNearby,
+  getAvailability,
   getListing,
   createListing,
   updateListing,
@@ -16,18 +21,44 @@ const { protect, restrictTo } = require("../middleware/auth");
 const upload = require("../middleware/upload");
 const { validateListing, validateReview } = require("../middleware/validate");
 
+// Public
 router.get("/categories", getCategories);
+router.get("/filters", getFilterMeta);
+router.get("/featured", getFeatured);
+router.get("/stats", getStats);
+router.get("/nearby", getNearby);
+
+// Owner-only (must be declared before "/:id")
 router.get("/mine", protect, restrictTo("owner"), getMyListings);
 
 router
   .route("/")
   .get(getListings)
-  .post(protect, restrictTo("owner"), upload.single("image"), validateListing, createListing);
+  .post(
+    protect,
+    restrictTo("owner"),
+    upload.fields([
+      { name: "image", maxCount: 1 },
+      { name: "gallery", maxCount: 5 },
+    ]),
+    validateListing,
+    createListing
+  );
+
+router.get("/:id/availability", getAvailability);
 
 router
   .route("/:id")
   .get(getListing)
-  .put(protect, restrictTo("owner"), upload.single("image"), updateListing)
+  .put(
+    protect,
+    restrictTo("owner"),
+    upload.fields([
+      { name: "image", maxCount: 1 },
+      { name: "gallery", maxCount: 5 },
+    ]),
+    updateListing
+  )
   .delete(protect, restrictTo("owner"), deleteListing);
 
 router.post("/:id/reviews", protect, validateReview, createReview);

@@ -7,6 +7,7 @@ const { validateBooking } = require("../middleware/validate");
 
 // Public
 router.get("/availability/:listingId", c.getAvailability);
+router.get("/quote", c.getQuote);
 
 router.use(protect);
 
@@ -25,6 +26,7 @@ router.put("/:id/payment/reject", restrictTo("owner"), c.rejectPayment);
 
 // Shared
 router.get("/:id", c.getBooking);
+router.get("/:id/invoice", c.getInvoice);
 router.put("/:id/cancel", c.cancelBooking);
 
 module.exports = router;

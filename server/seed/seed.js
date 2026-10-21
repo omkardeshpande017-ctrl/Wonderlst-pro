@@ -57,19 +57,52 @@ const run = async () => {
     sampleListings.map((l) => ({ ...l, owner: owner._id }))
   );
 
+  // A second host so the home page and search don't look like a one-owner site
+  const host2 = await User.create({
+    username: "mountain_host",
+    email: "host@wanderlust.com",
+    password: "password123",
+    role: "owner",
+    phone: "9800011122",
+    bio: "Mountain and backwater stays, run by a family that has hosted for 12 years.",
+    payment: {
+      upiId: "mountainhost@okbank",
+      payeeName: "Mountain Host",
+      qrCode: { url: "/uploads/demo-qr.svg", filename: "demo-qr.svg" },
+    },
+  });
+
+  // Give the second host the last four listings
+  const reassigned = listings.slice(-4).map((l) => l._id);
+  await Listing.updateMany({ _id: { $in: reassigned } }, { owner: host2._id });
+
+  const SERVICE_FEE_RATE = 0.05;
+  const quote = (listing, nights) => {
+    const subtotal = nights * listing.price;
+    const cleaningFee = listing.cleaningFee || 0;
+    const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE);
+    return {
+      cleaningFee,
+      serviceFee,
+      securityDeposit: listing.securityDeposit || 0,
+      totalPrice: subtotal + cleaningFee + serviceFee,
+    };
+  };
+
   const make = async (listing, who, start, nights, status, extra = {}) => {
     const checkIn = dateFromNow(start);
     const checkOut = dateFromNow(start + nights);
+    const listingOwner = listing.owner; // may be host2 after reassignment
     return Booking.create({
       listing: listing._id,
       guest: who._id,
-      owner: owner._id,
+      owner: listingOwner,
       checkIn,
       checkOut,
       nights,
       guests: 2,
       pricePerNight: listing.price,
-      totalPrice: listing.price * nights,
+      ...quote(listing, nights),
       status,
       message: "Looking forward to a relaxing stay!",
       ...extra,
@@ -112,8 +145,52 @@ const run = async () => {
     link: "/dashboard",
   });
 
-  console.log(`Seeded ${listings.length} listings and 5 bookings.`);
+  // ---- Reviews: real ratings so avgRating, reviewCount and the breakdown bars work ----
+  const reviewTexts = [
+    [5, "Exactly like the photos. Spotless, quiet, and the host replied within minutes."],
+    [5, "One of the best stays we've booked. We're already planning to come back."],
+    [4, "Lovely place and great location. The check-in instructions could be clearer."],
+    [5, "Beautiful property, thoughtful touches everywhere. Worth every rupee."],
+    [4, "Very comfortable and well kept. Breakfast was a highlight."],
+    [3, "Good stay overall, but the wifi was slow in the evenings."],
+    [5, "The view alone is worth it. Host went out of their way to help us."],
+    [4, "Clean, spacious and exactly as described. Would book again."],
+  ];
+
+  const reviewers = [guest, guest2];
+  let reviewTotal = 0;
+
+  for (let i = 0; i < listings.length; i++) {
+    const listing = listings[i];
+    // Each listing gets 1-3 reviews so the site doesn't look brand new
+    const howMany = 1 + (i % 3);
+    const ids = [];
+    for (let j = 0; j < howMany; j++) {
+      const [rating, comment] = reviewTexts[(i + j) % reviewTexts.length];
+      const author = reviewers[(i + j) % reviewers.length];
+      const review = await Review.create({
+        comment,
+        rating,
+        author: author._id,
+        username: author.username,
+        listing: listing._id,
+      });
+      ids.push(review._id);
+      reviewTotal++;
+    }
+
+    const agg = await Review.find({ _id: { $in: ids } });
+    const avg = agg.reduce((s, r) => s + r.rating, 0) / agg.length;
+    await Listing.findByIdAndUpdate(listing._id, {
+      reviews: ids,
+      avgRating: Math.round(avg * 10) / 10,
+      reviewCount: ids.length,
+    });
+  }
+
+  console.log(`Seeded ${listings.length} listings, 5 bookings and ${reviewTotal} reviews.`);
   console.log("Owner login : owner@wanderlust.com / password123");
+  console.log("Owner 2     : host@wanderlust.com / password123");
   console.log("Guest login : guest@wanderlust.com / password123");
   await mongoose.connection.close();
   process.exit(0);

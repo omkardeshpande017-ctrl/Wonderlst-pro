@@ -16,6 +16,8 @@ const listingRoutes = require("./routes/listingRoutes");
 const userRoutes = require("./routes/userRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
+const tripRoutes = require("./routes/tripRoutes");
 
 connectDB();
 
@@ -48,11 +50,25 @@ app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true, message: "Wanderlust API is running" });
 });
 
+// Friendly root so opening http://localhost:8080 in a browser isn't a 404
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    service: "Wanderlust API",
+    version: "2.0.0",
+    health: "/api/health",
+    docs: "See README.md — /api/auth, /api/listings, /api/bookings, /api/users, /api/reviews",
+    client: process.env.CLIENT_URL || "http://localhost:5173",
+  });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/trips", tripRoutes);
 
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: "Route not found" });
@@ -61,6 +77,22 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Wanderlust API listening on port ${PORT}`);
 });
+
+// Never let a stray promise rejection or thrown error kill the API.
+// Log it, and keep the process alive so the frontend never sees a dead backend.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
+
+const shutdown = (signal) => {
+  console.log(`${signal} received, closing server...`);
+  server.close(() => process.exit(0));
+};
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

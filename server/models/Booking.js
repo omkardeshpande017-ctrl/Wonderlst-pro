@@ -25,8 +25,13 @@ const bookingSchema = new mongoose.Schema(
     nights: { type: Number, required: true },
     guests: { type: Number, default: 1, min: 1 },
     pricePerNight: { type: Number, required: true },
+    cleaningFee: { type: Number, default: 0 },
+    serviceFee: { type: Number, default: 0 },
+    securityDeposit: { type: Number, default: 0 },
     totalPrice: { type: Number, required: true },
     message: { type: String, default: "", maxlength: 500 },
+    // Set when the guest cancels — the host can then see why
+    cancelReason: { type: String, default: "", maxlength: 300 },
     status: { type: String, enum: STATUSES, default: "pending", index: true },
     paymentDueAt: { type: Date },
     payment: {

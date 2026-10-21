@@ -1,8 +1,23 @@
-import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { FaCompass, FaSearch, FaUserCircle, FaPlus, FaHome } from "react-icons/fa";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import {
+  FaSearch,
+  FaUserCircle,
+  FaPlus,
+  FaBars,
+  FaTimes,
+  FaCompass,
+  FaRegHeart,
+  FaSuitcase,
+  FaCog,
+  FaSignOutAlt,
+  FaUser,
+} from "react-icons/fa";
 import { useAuth } from "../context/AuthContext.jsx";
 import NotificationBell from "./NotificationBell.jsx";
+
+const navLink =
+  "text-sm font-semibold text-ink-600 hover:text-ink-900 transition px-3 py-2 rounded-full hover:bg-ink-50";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -10,151 +25,243 @@ export default function Navbar() {
   const [searchParams] = useSearchParams();
   const [q, setQ] = useState(searchParams.get("search") || "");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const isOwner = user?.role === "owner";
+
+  useEffect(() => {
+    setQ(searchParams.get("search") || "");
+  }, [searchParams]);
+
+  // Close the account menu when clicking outside it
+  useEffect(() => {
+    const onClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
     navigate(q ? `/?search=${encodeURIComponent(q)}` : "/");
+    setMobileOpen(false);
   };
 
   const handleLogout = async () => {
+    setMenuOpen(false);
+    setMobileOpen(false);
     await logout();
     navigate("/");
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 sm:px-6 py-3">
-        <Link to="/" className="flex items-center gap-2 text-brand-500 font-extrabold text-xl shrink-0">
-          <FaCompass />
-          <span className="hidden sm:inline">Wanderlust</span>
+    <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/85 backdrop-blur-md">
+      <div className="container-page flex h-16 items-center justify-between gap-3">
+        <Link to="/" className="flex shrink-0 items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+            <FaCompass />
+          </span>
+          <span className="hidden text-lg font-extrabold tracking-tight text-ink-900 sm:inline">
+            Wander<span className="text-brand-500">lust</span>
+          </span>
         </Link>
 
-        {!isOwner && (
+        {!isOwner ? (
           <form
             onSubmit={handleSearch}
-            className="flex-1 max-w-md flex items-center border border-gray-300 rounded-full px-4 py-2 shadow-sm hover:shadow-md transition"
+            className="hidden flex-1 max-w-lg items-center gap-2 rounded-full border border-ink-200 bg-white px-4 py-2 shadow-sm transition hover:shadow-md focus-within:border-ink-900 md:flex"
           >
+            <FaSearch className="text-ink-400" size={13} />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search destinations..."
-              className="flex-1 outline-none text-sm bg-transparent"
+              placeholder="Search destinations, categories, stays..."
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-400"
             />
-            <button type="submit" className="text-brand-500">
-              <FaSearch />
+            <button
+              type="submit"
+              className="rounded-full bg-brand-500 px-3 py-1 text-xs font-bold text-white hover:bg-brand-600"
+            >
+              Search
             </button>
           </form>
-        )}
-        {isOwner && (
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-brand-500"
-          >
-            <FaHome /> Owner dashboard
-          </Link>
+        ) : (
+          <nav className="hidden items-center gap-1 md:flex">
+            <NavLink to="/dashboard" className={navLink}>
+              Dashboard
+            </NavLink>
+            <NavLink to="/listings/new" className={navLink}>
+              Add listing
+            </NavLink>
+            <NavLink to="/payment-settings" className={navLink}>
+              Payments
+            </NavLink>
+          </nav>
         )}
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
           {user && !isOwner && (
-            <Link
-              to="/bookings"
-              className="hidden sm:flex items-center gap-1 text-sm font-medium px-3 py-2 rounded-full hover:bg-gray-100"
-            >
+            <Link to="/bookings" className="hidden rounded-full px-3 py-2 text-sm font-semibold text-ink-600 hover:bg-ink-50 lg:flex">
               My trips
             </Link>
           )}
           {isOwner && (
-            <Link
-              to="/listings/new"
-              className="hidden sm:flex items-center gap-1 text-sm font-medium px-3 py-2 rounded-full hover:bg-gray-100"
-            >
-              <FaPlus size={12} /> Add listing
+            <Link to="/listings/new" className="hidden rounded-full p-2.5 text-ink-600 hover:bg-ink-50 sm:flex">
+              <FaPlus size={14} />
             </Link>
           )}
 
           {user && <NotificationBell />}
 
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-2 border border-gray-300 rounded-full px-3 py-1.5 hover:shadow-md transition"
+              className="flex items-center gap-2 rounded-full border border-ink-200 py-1.5 pl-3 pr-1.5 transition hover:shadow-md"
+              aria-label="Account menu"
             >
-              <span className="text-lg">☰</span>
+              <span className="hidden text-xs font-semibold text-ink-700 sm:inline">
+                {user ? user.username.split("_")[0] : "Menu"}
+              </span>
               {user?.avatar ? (
-                <img src={user.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                <img src={user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
               ) : (
-                <FaUserCircle className="text-2xl text-gray-500" />
+                <FaUserCircle className="text-2xl text-ink-400" />
               )}
             </button>
 
             {menuOpen && (
-              <div
-                onMouseLeave={() => setMenuOpen(false)}
-                className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-2 text-sm"
-              >
+              <div className="absolute right-0 mt-2 w-60 overflow-hidden rounded-2xl border border-ink-100 bg-white py-2 text-sm shadow-lift animate-fade-in">
                 {user ? (
                   <>
-                    <div className="px-4 py-2 text-gray-500 truncate">
-                      Hi, {user.username}{" "}
-                      <span className="ml-1 text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded-full">
-                        {user.role}
-                      </span>
+                    <div className="px-4 pb-2 pt-1">
+                      <p className="truncate font-semibold text-ink-900">Hi, {user.username}</p>
+                      <span className="badge mt-1 bg-ink-100 text-ink-600">{user.role}</span>
                     </div>
+                    <div className="my-1 h-px bg-ink-100" />
                     {isOwner ? (
                       <>
-                        <Link to="/dashboard" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
-                          Dashboard
-                        </Link>
-                        <Link to="/listings/new" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                        <MenuLink to="/dashboard" icon={<FaSuitcase />} onClick={() => setMenuOpen(false)}>
+                          Owner dashboard
+                        </MenuLink>
+                        <MenuLink to="/listings/new" icon={<FaPlus />} onClick={() => setMenuOpen(false)}>
                           Add listing
-                        </Link>
-                        <Link to="/dashboard?tab=bookings" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
-                          Bookings
-                        </Link>
-                        <Link to="/payment-settings" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                        </MenuLink>
+                        <MenuLink to="/payment-settings" icon={<FaCog />} onClick={() => setMenuOpen(false)}>
                           Payment settings
-                        </Link>
+                        </MenuLink>
                       </>
                     ) : (
                       <>
-                        <Link to="/bookings" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                        <MenuLink to="/bookings" icon={<FaSuitcase />} onClick={() => setMenuOpen(false)}>
                           My trips
-                        </Link>
-                        <Link to="/profile?tab=wishlist" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                        </MenuLink>
+                        <MenuLink
+                          to="/profile?tab=wishlist"
+                          icon={<FaRegHeart />}
+                          onClick={() => setMenuOpen(false)}
+                        >
                           Wishlist
-                        </Link>
+                        </MenuLink>
                       </>
                     )}
-                    <Link to="/profile" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                    <MenuLink to="/profile" icon={<FaUser />} onClick={() => setMenuOpen(false)}>
                       My profile
-                    </Link>
+                    </MenuLink>
                     <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        handleLogout();
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 text-red-500"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-red-600 hover:bg-red-50"
                     >
-                      Log out
+                      <FaSignOutAlt size={13} /> Log out
                     </button>
                   </>
                 ) : (
                   <>
-                    <Link to="/login" className="block px-4 py-2 hover:bg-gray-50 font-medium" onClick={() => setMenuOpen(false)}>
+                    <MenuLink to="/login" onClick={() => setMenuOpen(false)} bold>
                       Log in
-                    </Link>
-                    <Link to="/register" className="block px-4 py-2 hover:bg-gray-50" onClick={() => setMenuOpen(false)}>
+                    </MenuLink>
+                    <MenuLink to="/register" onClick={() => setMenuOpen(false)}>
                       Sign up
-                    </Link>
+                    </MenuLink>
+                    <div className="my-1 h-px bg-ink-100" />
+                    <MenuLink to="/register?role=owner" onClick={() => setMenuOpen(false)}>
+                      Become a host
+                    </MenuLink>
                   </>
                 )}
               </div>
             )}
           </div>
+
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="rounded-full p-2.5 text-ink-700 hover:bg-ink-50 md:hidden"
+            aria-label="Open menu"
+          >
+            {mobileOpen ? <FaTimes /> : <FaBars />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="border-t border-ink-100 bg-white px-4 pb-4 pt-3 md:hidden animate-fade-in">
+          {!isOwner && (
+            <form onSubmit={handleSearch} className="mb-3 flex items-center gap-2 rounded-full border border-ink-200 px-4 py-2">
+              <FaSearch className="text-ink-400" size={13} />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search stays..."
+                className="flex-1 bg-transparent text-sm outline-none"
+              />
+            </form>
+          )}
+          <div className="grid gap-1 text-sm font-semibold">
+            {isOwner ? (
+              <>
+                <MobileLink to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</MobileLink>
+                <MobileLink to="/listings/new" onClick={() => setMobileOpen(false)}>Add listing</MobileLink>
+                <MobileLink to="/payment-settings" onClick={() => setMobileOpen(false)}>Payment settings</MobileLink>
+              </>
+            ) : (
+              <MobileLink to="/bookings" onClick={() => setMobileOpen(false)}>My trips</MobileLink>
+            )}
+            <MobileLink to="/profile" onClick={() => setMobileOpen(false)}>My profile</MobileLink>
+            {!user && <MobileLink to="/login" onClick={() => setMobileOpen(false)}>Log in</MobileLink>}
+            {!user && <MobileLink to="/register" onClick={() => setMobileOpen(false)}>Sign up</MobileLink>}
+            {user && (
+              <button onClick={handleLogout} className="rounded-xl px-3 py-2 text-left text-red-600">
+                Log out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
+  );
+}
+
+function MenuLink({ to, children, icon, onClick, bold }) {
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-2.5 hover:bg-ink-50 ${
+        bold ? "font-semibold text-ink-900" : "text-ink-700"
+      }`}
+    >
+      {icon && <span className="text-ink-400">{icon}</span>}
+      {children}
+    </Link>
+  );
+}
+
+function MobileLink({ to, children, onClick }) {
+  return (
+    <Link to={to} onClick={onClick} className="rounded-xl px-3 py-2 text-ink-700 hover:bg-ink-50">
+      {children}
+    </Link>
   );
 }

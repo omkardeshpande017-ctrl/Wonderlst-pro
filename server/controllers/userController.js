@@ -21,6 +21,17 @@ exports.updateProfile = catchAsync(async (req, res, next) => {
   res.status(200).json({ success: true, user: user.toSafeObject() });
 });
 
+// GET /api/users/me — the logged-in user's own profile
+// (the client calls this on the Profile page; /auth/me returns the same shape)
+exports.getMe = catchAsync(async (req, res, next) => {
+  const user = await User.findById(req.user._id).populate({
+    path: "wishlist",
+    populate: { path: "owner", select: "username" },
+  });
+  if (!user) return next(new ApiError(404, "User not found"));
+  res.status(200).json({ success: true, user: user.toSafeObject() });
+});
+
 exports.getWishlist = catchAsync(async (req, res) => {
   const user = await User.findById(req.user._id).populate({
     path: "wishlist",

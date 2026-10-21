@@ -3,13 +3,15 @@ const Review = require("../models/Review");
 const ApiError = require("../utils/ApiError");
 const catchAsync = require("../utils/catchAsync");
 
+// Keeps avgRating + reviewCount in sync — used after every review change
 const recalcAvgRating = async (listingId) => {
   const listing = await Listing.findById(listingId).populate("reviews");
   if (!listing) return;
   const count = listing.reviews.length;
   listing.avgRating = count
-    ? listing.reviews.reduce((sum, r) => sum + r.rating, 0) / count
+    ? Math.round((listing.reviews.reduce((sum, r) => sum + r.rating, 0) / count) * 10) / 10
     : 0;
+  listing.reviewCount = count;
   await listing.save();
 };
 
@@ -54,4 +56,17 @@ exports.deleteReview = catchAsync(async (req, res, next) => {
   await recalcAvgRating(listingId);
 
   res.status(200).json({ success: true, message: "Review deleted" });
+});
+
+// GET /api/reviews/recent — public testimonials for the home page
+exports.getRecentReviews = catchAsync(async (req, res) => {
+  const limit = Math.min(12, Math.max(1, Number(req.query.limit) || 6));
+
+  const reviews = await Review.find({ rating: { $gte: 4 } })
+    .populate("author", "username avatar")
+    .populate("listing", "title location country image")
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  res.status(200).json({ success: true, count: reviews.length, reviews });
 });

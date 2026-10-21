@@ -122,13 +122,57 @@ export default function BookingDetail() {
       <div className="mt-4 text-sm border border-gray-200 rounded-xl p-4">
         <p className="text-gray-400 mb-1">{isOwner ? "Guest" : "Host"}</p>
         <p className="font-semibold">{isOwner ? booking.guest?.username : booking.owner?.username}</p>
-        {(isOwner ? booking.guest?.phone : booking.owner?.phone) && (
-          <p className="text-gray-500">{isOwner ? booking.guest.phone : booking.owner.phone}</p>
-        )}
-        {booking.message && (
-          <p className="text-gray-500 mt-2 italic">&ldquo;{booking.message}&rdquo;</p>
-        )}
       </div>
+
+      <div className="mt-4 text-sm border border-gray-200 rounded-xl p-4">
+        <p className="text-gray-400 mb-2">Price breakdown</p>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-gray-500">
+            <span>
+              &#8377;{Number(booking.pricePerNight || 0).toLocaleString("en-IN")} × {booking.nights} night
+              {booking.nights > 1 ? "s" : ""}
+            </span>
+            <span>
+              &#8377;
+              {(Number(booking.pricePerNight || 0) * booking.nights).toLocaleString("en-IN")}
+            </span>
+          </div>
+          {booking.cleaningFee > 0 && (
+            <div className="flex justify-between text-gray-500">
+              <span>Cleaning fee</span>
+              <span>&#8377;{Number(booking.cleaningFee).toLocaleString("en-IN")}</span>
+            </div>
+          )}
+          {booking.serviceFee > 0 && (
+            <div className="flex justify-between text-gray-500">
+              <span>Service fee</span>
+              <span>&#8377;{Number(booking.serviceFee).toLocaleString("en-IN")}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-semibold border-t border-gray-100 pt-1.5">
+            <span>Total</span>
+            <span>&#8377;{booking.totalPrice.toLocaleString("en-IN")}</span>
+          </div>
+          {booking.securityDeposit > 0 && (
+            <div className="flex justify-between text-gray-400 text-xs">
+              <span>Refundable security deposit</span>
+              <span>&#8377;{Number(booking.securityDeposit).toLocaleString("en-IN")}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(booking.message || (isOwner ? booking.guest?.phone : booking.owner?.phone)) && (
+        <div className="mt-4 text-sm border border-gray-200 rounded-xl p-4">
+          <p className="text-gray-400 mb-1">Contact &amp; notes</p>
+          {(isOwner ? booking.guest?.phone : booking.owner?.phone) && (
+            <p className="text-gray-500">{isOwner ? booking.guest.phone : booking.owner.phone}</p>
+          )}
+          {booking.message && (
+            <p className="text-gray-500 mt-2 italic">&ldquo;{booking.message}&rdquo;</p>
+          )}
+        </div>
+      )}
 
       {booking.decisionReason && ["rejected", "cancelled"].includes(booking.status) && (
         <div className="mt-4 text-sm bg-red-50 text-red-600 rounded-xl p-4">
@@ -277,8 +321,17 @@ export default function BookingDetail() {
       {/* Confirmed / completed summary */}
       {["confirmed", "completed"].includes(booking.status) && (
         <div className="mt-6 bg-green-50 text-green-700 text-sm rounded-xl p-4">
-          Payment verified{booking.payment?.transactionId ? ` (txn: ${booking.payment.transactionId})` : ""}.
-          {booking.status === "confirmed" ? " Your stay is confirmed." : " This stay is complete."}
+          <p>
+            Payment verified
+            {booking.payment?.transactionId ? ` (txn: ${booking.payment.transactionId})` : ""}.
+            {booking.status === "confirmed" ? " Your stay is confirmed." : " This stay is complete."}
+          </p>
+          <Link
+            to={`/bookings/${id}/invoice`}
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-green-700 shadow-sm hover:bg-green-100"
+          >
+            🧾 View invoice
+          </Link>
         </div>
       )}
 

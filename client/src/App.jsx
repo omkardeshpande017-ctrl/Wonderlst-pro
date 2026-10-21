@@ -15,12 +15,19 @@ import MyBookings from "./pages/MyBookings.jsx";
 import BookingDetail from "./pages/BookingDetail.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import PaymentSettings from "./pages/PaymentSettings.jsx";
+import Invoice from "./pages/Invoice.jsx";
 import NotFound from "./pages/NotFound.jsx";
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <Toaster position="top-center" />
+    <div className="min-h-screen flex flex-col bg-white">
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: { borderRadius: "12px", fontSize: "14px" },
+          success: { iconTheme: { primary: "#0f9d76", secondary: "#fff" } },
+        }}
+      />
       <Navbar />
       <main className="flex-1">
         <Routes>
@@ -59,6 +66,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <BookingDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/bookings/:id/invoice"
+            element={
+              <ProtectedRoute>
+                <Invoice />
               </ProtectedRoute>
             }
           />

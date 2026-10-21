@@ -8,7 +8,28 @@ const { fileInfo } = require("../middleware/upload");
 
 const DAY = 24 * 60 * 60 * 1000;
 const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000; // guest has 24h to pay after approval
+const SERVICE_FEE_RATE = 0.05; // 5% platform fee shown on every quote
 const { BLOCKING_STATUSES } = Booking;
+
+// Single source of truth for pricing, used by quotes, booking creation and invoices
+const priceBreakdown = (listing, nights) => {
+  const subtotal = Math.round(nights * listing.price);
+  const cleaningFee = Math.round(listing.cleaningFee || 0);
+  const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE);
+  const securityDeposit = Math.round(listing.securityDeposit || 0);
+  const total = subtotal + cleaningFee + serviceFee;
+  return {
+    nights,
+    pricePerNight: listing.price,
+    subtotal,
+    cleaningFee,
+    serviceFee,
+    serviceFeeRate: SERVICE_FEE_RATE,
+    securityDeposit,
+    total,
+    dueNow: total + securityDeposit,
+  };
+};
 
 const startOfDay = (d) => {
   const x = new Date(d);
@@ -98,6 +119,7 @@ exports.createBooking = catchAsync(async (req, res, next) => {
   }
 
   const nights = Math.round((checkOut - checkIn) / DAY);
+  const quote = priceBreakdown(listing, nights);
   const booking = await Booking.create({
     listing: listing._id,
     guest: req.user._id,
@@ -107,17 +129,55 @@ exports.createBooking = catchAsync(async (req, res, next) => {
     nights,
     guests: guests || 1,
     pricePerNight: listing.price,
-    totalPrice: nights * listing.price,
+    cleaningFee: quote.cleaningFee,
+    serviceFee: quote.serviceFee,
+    securityDeposit: quote.securityDeposit,
+    totalPrice: quote.total,
     message: message || "",
+    // Instant-book listings skip owner approval and go straight to payment
+    status: listing.instantBook ? "approved" : "pending",
+    paymentDueAt: listing.instantBook ? new Date(Date.now() + PAYMENT_WINDOW_MS) : undefined,
   });
 
   await notify(listing.owner, {
-    title: "New booking request",
+    title: listing.instantBook ? "Instant booking confirmed" : "New booking request",
     message: `${req.user.username} requested ${listing.title} for ${nights} night${nights > 1 ? "s" : ""}.`,
     link: `/bookings/${booking._id}`,
   });
 
   res.status(201).json({ success: true, booking });
+});
+
+// GET /api/bookings/quote?listingId=&checkIn=&checkOut=&guests=
+// Lets the widget show the exact price before the guest sends a request
+exports.getQuote = catchAsync(async (req, res, next) => {
+  const { listingId, checkIn, checkOut, guests = 1 } = req.query;
+  if (!listingId || !checkIn || !checkOut) {
+    return next(new ApiError(400, "listingId, checkIn and checkOut are required"));
+  }
+
+  const listing = await Listing.findById(listingId);
+  if (!listing) return next(new ApiError(404, "Listing not found"));
+
+  const start = startOfDay(checkIn);
+  const end = startOfDay(checkOut);
+  const nights = Math.round((end - start) / DAY);
+
+  if (nights <= 0) {
+    return res.status(200).json({ success: true, quote: null, message: "Invalid dates" });
+  }
+
+  const quote = priceBreakdown(listing, nights);
+  const available = !(await hasOverlap(listing._id, start, end));
+  const tooManyGuests = Number(guests) > listing.maxGuests;
+
+  res.status(200).json({
+    success: true,
+    available: available && !tooManyGuests,
+    maxGuests: listing.maxGuests,
+    instantBook: listing.instantBook,
+    quote,
+  });
 });
 
 exports.getMyBookings = catchAsync(async (req, res) => {
@@ -343,6 +403,79 @@ exports.rejectPayment = catchAsync(async (req, res, next) => {
 });
 
 // ---------- Shared ----------
+
+// GET /api/bookings/:id/invoice
+// A printable invoice — only for confirmed/completed stays, only for the two parties
+exports.getInvoice = catchAsync(async (req, res, next) => {
+  const booking = await populateBooking(Booking.findById(req.params.id));
+  if (!booking) return next(new ApiError(404, "Booking not found"));
+
+  const uid = req.user._id.toString();
+  const isGuest = booking.guest._id.toString() === uid;
+  const isOwner = booking.owner._id.toString() === uid;
+  if (!isGuest && !isOwner) {
+    return next(new ApiError(403, "You don't have access to this invoice"));
+  }
+
+  if (!["confirmed", "completed"].includes(booking.status)) {
+    return next(
+      new ApiError(400, "An invoice is only available once the booking is confirmed")
+    );
+  }
+
+  const nights = booking.nights;
+  const subtotal = Math.round(nights * booking.pricePerNight);
+  const cleaningFee = Math.round(booking.cleaningFee || 0);
+  const serviceFee = Math.round(booking.serviceFee || 0);
+
+  res.status(200).json({
+    success: true,
+    invoice: {
+      number: `INV-${booking.code.replace("WL-", "")}`,
+      bookingCode: booking.code,
+      issuedAt: booking.payment?.verifiedAt || booking.updatedAt,
+      status: booking.status,
+      listing: {
+        id: booking.listing._id,
+        title: booking.listing.title,
+        location: booking.listing.location,
+        country: booking.listing.country,
+        image: booking.listing.image?.url,
+      },
+      guest: {
+        username: booking.guest.username,
+        email: booking.guest.email,
+        phone: booking.guest.phone,
+      },
+      host: {
+        username: booking.owner.username,
+        email: booking.owner.email,
+        phone: booking.owner.phone,
+      },
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      nights,
+      guests: booking.guests,
+      lines: [
+        {
+          label: `\u20b9${booking.pricePerNight.toLocaleString("en-IN")} \u00d7 ${nights} night${
+            nights > 1 ? "s" : ""
+          }`,
+          amount: subtotal,
+        },
+        { label: "Cleaning fee", amount: cleaningFee },
+        { label: "Service fee", amount: serviceFee },
+      ],
+      subtotal,
+      cleaningFee,
+      serviceFee,
+      securityDeposit: Math.round(booking.securityDeposit || 0),
+      total: Math.round(booking.totalPrice),
+      transactionId: booking.payment?.transactionId || "",
+      paidAt: booking.payment?.verifiedAt || null,
+    },
+  });
+});
 
 exports.getBooking = catchAsync(async (req, res, next) => {
   await refreshStatuses();

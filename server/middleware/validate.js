@@ -18,9 +18,22 @@ const listingSchema = Joi.object({
   title: Joi.string().max(100).required(),
   description: Joi.string().max(2000).required(),
   price: Joi.number().min(0).required(),
+  cleaningFee: Joi.number().min(0).allow("").optional(),
+  securityDeposit: Joi.number().min(0).allow("").optional(),
   location: Joi.string().required(),
   country: Joi.string().required(),
   category: Joi.string().optional(),
+  bookingType: Joi.string().optional(),
+  maxGuests: Joi.number().integer().min(1).max(30).allow("").optional(),
+  bedrooms: Joi.number().integer().min(0).max(30).allow("").optional(),
+  beds: Joi.number().integer().min(1).max(60).allow("").optional(),
+  bathrooms: Joi.number().integer().min(0).max(30).allow("").optional(),
+  // The client sends amenities either as an array or as a comma separated string
+  amenities: Joi.alternatives()
+    .try(Joi.array().items(Joi.string()), Joi.string().allow(""))
+    .optional(),
+  instantBook: Joi.alternatives().try(Joi.boolean(), Joi.string().valid("true", "false")).optional(),
+  featured: Joi.alternatives().try(Joi.boolean(), Joi.string().valid("true", "false")).optional(),
   lat: Joi.number().optional(),
   lng: Joi.number().optional(),
 });
