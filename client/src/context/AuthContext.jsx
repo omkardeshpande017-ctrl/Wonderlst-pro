@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import api from "../api/axios.js";
+import api, { setAuthToken } from "../api/axios.js";
 
 const AuthContext = createContext(null);
 
@@ -24,18 +24,25 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
+    setAuthToken(data.token); // works even when cross-site cookies are blocked
     setUser(data.user);
     return data.user;
   };
 
   const register = async (username, email, password, role, phone) => {
     const { data } = await api.post("/auth/register", { username, email, password, role, phone });
+    setAuthToken(data.token);
     setUser(data.user);
     return data.user;
   };
 
   const logout = async () => {
-    await api.post("/auth/logout");
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      /* ignore network errors on logout */
+    }
+    setAuthToken(null);
     setUser(null);
   };
 

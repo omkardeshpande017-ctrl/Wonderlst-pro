@@ -1,22 +1,27 @@
-# Deploy the API (Express) to Render — free tier friendly.
-# Docs: https://render.com/docs/blueprint-spec
+# Render blueprint for the Wanderlust Pro API.
+# https://render.com/docs/blueprint-spec
+#
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+# Then fill in the secret env vars (MONGO_URI, CLIENT_URL) in the service.
 services:
   - type: web
     name: wanderlust-api
     runtime: node
     plan: free
+    region: singapore
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      # Set these in the Render dashboard after the first deploy:
-      #   MONGO_URI  -> your MongoDB Atlas connection string
-      #   CLIENT_URL -> the deployed frontend origin (comma separated for several)
-      #   JWT_SECRET -> a long random string
+      - key: PORT
+        value: 10000
+      # Fill these in the dashboard after the first deploy:
+      #   MONGO_URI  = mongodb+srv://... (MongoDB Atlas)
+      #   CLIENT_URL = https://wanderlust-pro-iota.vercel.app
       - key: MONGO_URI
         sync: false
       - key: CLIENT_URL
