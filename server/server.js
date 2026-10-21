@@ -62,9 +62,13 @@ if (process.env.NODE_ENV !== "production") app.use(morgan("dev"));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  // Production gets a generous allowance; development/testing is looser still
+  // because the smoke test makes ~50 calls per run.
+  max: process.env.NODE_ENV === "production" ? 2000 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
+  // Health checks and the test suite must never be throttled
+  skip: (req) => req.path === "/api/health" || req.path === "/health",
 });
 app.use("/api", apiLimiter);
 

@@ -50,10 +50,14 @@ const refreshStatuses = async () => {
   );
 };
 
+// A pending request also reserves the dates for its guest, otherwise two guests
+// could both be approved for the same nights by mistake.
+const HOLDING_STATUSES = ["pending", ...BLOCKING_STATUSES];
+
 const hasOverlap = async (listingId, checkIn, checkOut, excludeId) => {
   const query = {
     listing: listingId,
-    status: { $in: BLOCKING_STATUSES },
+    status: { $in: HOLDING_STATUSES },
     checkIn: { $lt: checkOut },
     checkOut: { $gt: checkIn },
   };

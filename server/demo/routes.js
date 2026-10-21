@@ -95,7 +95,9 @@ const overlap = (listingId, checkIn, checkOut, excludeId) =>
   store.bookings.some(
     (b) =>
       b.listing === listingId &&
-      ["approved", "payment_submitted", "confirmed"].includes(b.status) &&
+      // a pending request also holds the dates, so two guests can't be approved
+      // for the same nights by mistake
+      ["pending", "approved", "payment_submitted", "confirmed"].includes(b.status) &&
       b._id !== excludeId &&
       new Date(b.checkIn) < checkOut &&
       new Date(b.checkOut) > checkIn

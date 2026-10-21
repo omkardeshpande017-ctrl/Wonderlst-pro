@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { FaHome, FaClock, FaMoneyBillWave, FaCheckCircle, FaQrcode } from "react-icons/fa";
+import {
+  FaHome,
+  FaClock,
+  FaMoneyBillWave,
+  FaCheckCircle,
+  FaQrcode,
+  FaPlus,
+  FaArrowRight,
+  FaBed,
+} from "react-icons/fa";
 import api from "../api/axios.js";
 import ListingCard from "../components/ListingCard.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-
-const fmtDate = (d) =>
-  new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+import { inr, shortDate } from "../utils/format.js";
 
 const STATUS_FILTERS = [
   { key: "", label: "All" },
@@ -17,6 +24,12 @@ const STATUS_FILTERS = [
   { key: "payment_submitted", label: "To verify" },
   { key: "confirmed", label: "Confirmed" },
   { key: "completed", label: "Completed" },
+];
+
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "bookings", label: "Bookings" },
+  { key: "listings", label: "Listings" },
 ];
 
 export default function Dashboard() {
@@ -30,185 +43,261 @@ export default function Dashboard() {
   const [listings, setListings] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const loadOverview = async () => {
-    const { data } = await api.get("/bookings/owner/stats");
-    setStats(data.stats);
-    setMonthly(data.monthly);
-  };
-
-  const loadListings = async () => {
-    const { data } = await api.get("/listings/mine");
-    setListings(data.listings);
-  };
-
-  const loadBookings = async () => {
-    const { data } = await api.get("/bookings/owner", {
-      params: statusFilter ? { status: statusFilter } : {},
-    });
-    setBookings(data.bookings);
-  };
+  const [bookingsLoading, setBookingsLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadOverview(), loadListings()])
+    Promise.all([api.get("/bookings/owner/stats"), api.get("/listings/mine")])
+      .then(([s, l]) => {
+        setStats(s.data.stats);
+        setMonthly(s.data.monthly || []);
+        setListings(l.data.listings || []);
+      })
       .catch(() => toast.error("Could not load dashboard"))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (tab === "bookings") loadBookings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (tab !== "bookings") return;
+    setBookingsLoading(true);
+    api
+      .get("/bookings/owner", { params: statusFilter ? { status: statusFilter } : {} })
+      .then(({ data }) => setBookings(data.bookings || []))
+      .catch(() => toast.error("Could not load bookings"))
+      .finally(() => setBookingsLoading(false));
   }, [tab, statusFilter]);
 
   const setTab = (t) => setSearchParams(t === "overview" ? {} : { tab: t });
   const setStatus = (s) => setSearchParams({ tab: "bookings", ...(s ? { status: s } : {}) });
 
-  const maxMonthly = Math.max(1, ...monthly.map((m) => m.total));
+  const maxMonthly = useMemo(
+    () => Math.max(1, ...monthly.map((m) => m.total || 0)),
+    [monthly]
+  );
+
+  const needsPaymentSetup = !user?.payment?.upiId && !user?.payment?.qrCode?.url;
+  const needsAttention =
+    (stats?.pendingRequests || 0) + (stats?.awaitingVerification || 0);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold">Owner dashboard</h1>
-        <Link
-          to="/payment-settings"
-          className="flex items-center gap-2 text-sm font-medium border border-gray-300 px-3 py-1.5 rounded-full hover:bg-gray-50"
-        >
-          <FaQrcode /> Payment settings
-        </Link>
+    <div className="container-page py-10">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink-900">Owner dashboard</h1>
+          <p className="muted mt-1 text-sm">
+            Welcome back, {user?.username}. {needsAttention > 0
+              ? `${needsAttention} booking${needsAttention > 1 ? "s" : ""} need your attention.`
+              : "You're all caught up."}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link to="/payment-settings" className="btn-ghost">
+            <FaQrcode size={11} /> Payment settings
+          </Link>
+          <Link to="/listings/new" className="btn-primary">
+            <FaPlus size={11} /> Add listing
+          </Link>
+        </div>
       </div>
 
-      {!user.payment?.upiId && !user.payment?.qrCode?.url && (
-        <div className="bg-yellow-50 text-yellow-800 text-sm rounded-lg px-4 py-3 mb-6">
-          Add your UPI ID or QR code in{" "}
-          <Link to="/payment-settings" className="font-semibold underline">
-            Payment settings
-          </Link>{" "}
-          before you can approve bookings.
+      {needsPaymentSetup && (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span>
+            Add your UPI ID or QR code so guests can pay you — required before you approve bookings.
+          </span>
+          <Link to="/payment-settings" className="btn-dark py-2 text-xs">
+            Set up payments
+          </Link>
         </div>
       )}
 
-      <div className="flex gap-6 border-b border-gray-200 mb-6 text-sm font-medium">
-        {["overview", "listings", "bookings"].map((t) => (
+      {/* Tabs */}
+      <div className="mt-6 flex gap-1 border-b border-ink-100">
+        {TABS.map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`pb-3 border-b-2 capitalize transition ${
-              tab === t ? "border-gray-900 text-gray-900" : "border-transparent text-gray-400"
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              tab === t.key
+                ? "border-ink-900 text-ink-900"
+                : "border-transparent text-ink-400 hover:text-ink-700"
             }`}
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </div>
 
+      {/* Overview */}
       {tab === "overview" &&
         (loading || !stats ? (
-          <p className="text-gray-400">Loading...</p>
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="skeleton h-24 rounded-2xl" />
+            ))}
+          </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-              <StatCard icon={<FaHome />} label="Listings" value={stats.listings} />
-              <StatCard icon={<FaClock />} label="Pending requests" value={stats.pendingRequests} />
-              <StatCard icon={<FaClock />} label="Awaiting payment" value={stats.awaitingPayment} />
-              <StatCard icon={<FaClock />} label="To verify" value={stats.awaitingVerification} />
-              <StatCard icon={<FaCheckCircle />} label="Confirmed" value={stats.confirmed} />
-              <StatCard icon={<FaCheckCircle />} label="Completed stays" value={stats.completed} />
-              <StatCard
-                icon={<FaMoneyBillWave />}
-                label="Total earnings"
-                value={`\u20b9${stats.earnings.toLocaleString("en-IN")}`}
-              />
-              <StatCard icon={<FaHome />} label="Upcoming stays" value={stats.upcomingStays} />
+            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <StatCard label="Total earnings" value={inr(stats.earnings)} icon={<FaMoneyBillWave />} highlight />
+              <StatCard label="Listings" value={stats.listings} icon={<FaHome />} />
+              <StatCard label="Pending requests" value={stats.pendingRequests} icon={<FaClock />} />
+              <StatCard label="Awaiting payment" value={stats.awaitingPayment} icon={<FaClock />} />
+              <StatCard label="To verify" value={stats.awaitingVerification} icon={<FaClock />} />
+              <StatCard label="Confirmed" value={stats.confirmed} icon={<FaCheckCircle />} />
+              <StatCard label="Completed stays" value={stats.completed} icon={<FaCheckCircle />} />
+              <StatCard label="Upcoming stays" value={stats.upcomingStays} icon={<FaBed />} />
             </div>
 
-            <div className="border border-gray-200 rounded-xl p-5">
-              <h2 className="font-semibold mb-4">Earnings — last 6 months</h2>
-              <div className="flex items-end gap-3 h-40">
-                {monthly.map((m) => (
-                  <div key={m.key} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full bg-brand-500 rounded-t-md min-h-[4px]"
-                      style={{ height: `${(m.total / maxMonthly) * 100}%` }}
-                      title={`\u20b9${m.total.toLocaleString("en-IN")}`}
-                    />
-                    <span className="text-[11px] text-gray-400">{m.label}</span>
-                  </div>
-                ))}
+            <div className="mt-6 grid gap-5 lg:grid-cols-3">
+              <div className="card p-5 lg:col-span-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-bold text-ink-900">Earnings — last 6 months</h2>
+                  <span className="text-xs text-ink-400">confirmed + completed</span>
+                </div>
+                <div className="mt-6 flex h-44 items-end gap-3">
+                  {monthly.map((m) => (
+                    <div key={m.key || m.month} className="flex flex-1 flex-col items-center gap-2">
+                      <span className="text-[10px] font-semibold text-ink-500">
+                        {m.total ? inr(m.total).replace("₹", "") : ""}
+                      </span>
+                      <div
+                        className="w-full rounded-t-md bg-gradient-to-t from-brand-500 to-brand-400 transition-all"
+                        style={{ height: `${Math.max(4, (m.total / maxMonthly) * 100)}%` }}
+                        title={inr(m.total)}
+                      />
+                      <span className="text-[11px] text-ink-400">{m.label || m.month}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card flex flex-col justify-between p-5">
+                <div>
+                  <h2 className="font-bold text-ink-900">Next actions</h2>
+                  <ul className="mt-3 space-y-2 text-sm text-ink-600">
+                    <li className="flex items-center justify-between">
+                      <span>Approve requests</span>
+                      <span className="font-bold text-ink-900">{stats.pendingRequests}</span>
+                    </li>
+                    <li className="flex items-center justify-between">
+                      <span>Verify payments</span>
+                      <span className="font-bold text-ink-900">{stats.awaitingVerification}</span>
+                    </li>
+                    <li className="flex items-center justify-between">
+                      <span>Awaiting guest payment</span>
+                      <span className="font-bold text-ink-900">{stats.awaitingPayment}</span>
+                    </li>
+                  </ul>
+                </div>
+                <button onClick={() => setTab("bookings")} className="btn-dark mt-5 w-full">
+                  Open bookings <FaArrowRight size={10} />
+                </button>
               </div>
             </div>
           </>
         ))}
 
-      {tab === "listings" &&
-        (listings.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-gray-400 mb-4">You haven't listed any stays yet.</p>
-            <Link to="/listings/new" className="text-brand-500 font-medium">
-              Add your first listing
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-8">
-            {listings.map((l) => (
-              <ListingCard key={l._id} listing={l} />
-            ))}
-          </div>
-        ))}
-
+      {/* Bookings */}
       {tab === "bookings" && (
-        <div>
-          <div className="flex gap-2 overflow-x-auto pb-4 mb-2">
+        <div className="mt-6">
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setStatus(f.key)}
-                className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border ${
-                  statusFilter === f.key
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
-                }`}
+                className={`chip shrink-0 ${statusFilter === f.key ? "chip-active" : ""}`}
               >
                 {f.label}
               </button>
             ))}
           </div>
 
-          {bookings.length === 0 ? (
-            <p className="text-gray-400 text-center py-16">No bookings in this filter.</p>
+          {bookingsLoading ? (
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton h-24 rounded-2xl" />
+              ))}
+            </div>
+          ) : bookings.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-dashed border-ink-200 py-16 text-center">
+              <p className="font-semibold text-ink-900">No bookings in this filter</p>
+              <p className="muted mt-1 text-sm">New requests will appear here instantly.</p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="mt-4 space-y-3">
               {bookings.map((b) => (
                 <Link
                   key={b._id}
                   to={`/bookings/${b._id}`}
-                  className="flex items-center gap-4 border border-gray-200 rounded-xl p-4 hover:shadow-md transition"
+                  className="card flex items-center gap-4 p-4 transition hover:shadow-lift"
                 >
-                  <img src={b.listing?.image?.url} alt="" className="w-16 h-16 object-cover rounded-lg shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{b.listing?.title}</p>
-                    <p className="text-sm text-gray-500">
-                      {b.guest?.username} &middot; {fmtDate(b.checkIn)} &rarr; {fmtDate(b.checkOut)}
+                  <img
+                    src={b.listing?.image?.url}
+                    alt=""
+                    className="h-20 w-24 shrink-0 rounded-xl object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-bold text-ink-900">{b.listing?.title}</p>
+                      <StatusBadge status={b.status} />
+                    </div>
+                    <p className="mt-1 text-sm text-ink-500">
+                      {b.guest?.username} · {shortDate(b.checkIn)} → {shortDate(b.checkOut)} ·{" "}
+                      {b.nights} night{b.nights > 1 ? "s" : ""}
                     </p>
-                    <p className="text-sm font-medium mt-1">&#8377;{b.totalPrice.toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-ink-400">{b.code}</p>
                   </div>
-                  <StatusBadge status={b.status} />
+                  <p className="shrink-0 font-extrabold text-ink-900">{inr(b.totalPrice)}</p>
                 </Link>
               ))}
             </div>
           )}
         </div>
       )}
+
+      {/* Listings */}
+      {tab === "listings" &&
+        (loading ? (
+          <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i}>
+                <div className="skeleton aspect-[4/3] rounded-2xl" />
+                <div className="skeleton mt-3 h-3.5 w-2/3 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : listings.length === 0 ? (
+          <div className="mt-6 rounded-3xl border border-dashed border-ink-200 py-16 text-center">
+            <p className="font-semibold text-ink-900">You haven't listed any stays yet</p>
+            <Link to="/listings/new" className="btn-primary mt-5">
+              Add your first listing
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-6 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {listings.map((l) => (
+              <ListingCard key={l._id} listing={l} />
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
 
-function StatCard({ icon, label, value }) {
+function StatCard({ icon, label, value, highlight }) {
   return (
-    <div className="border border-gray-200 rounded-xl p-4">
-      <div className="text-brand-500 mb-2">{icon}</div>
-      <p className="text-xl font-bold">{value}</p>
-      <p className="text-xs text-gray-500">{label}</p>
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight ? "border-brand-200 bg-brand-50" : "border-ink-100 bg-white"
+      }`}
+    >
+      <span className={`text-sm ${highlight ? "text-brand-500" : "text-ink-400"}`}>{icon}</span>
+      <p className={`mt-2 text-xl font-extrabold ${highlight ? "text-brand-700" : "text-ink-900"}`}>
+        {value}
+      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-400">{label}</p>
     </div>
   );
 }

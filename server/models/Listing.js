@@ -38,6 +38,9 @@ const AMENITIES = [
 // The kind of place being booked — shown as a badge and used for filtering
 const BOOKING_TYPES = ["Entire place", "Private room", "Shared room"];
 
+// Common timezones offered on the profile page
+const TIMEZONES = ["Asia/Kolkata", "Asia/Dubai", "Europe/London", "America/New_York", "UTC"];
+
 const listingSchema = new mongoose.Schema(
   {
     title: {
