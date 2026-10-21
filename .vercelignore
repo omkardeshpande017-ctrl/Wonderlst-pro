@@ -1,0 +1,11 @@
+# Everything here is excluded from the deployment bundle.
+# The API function only needs /server and /api.
+client/node_modules
+server/node_modules
+node_modules
+client/dist
+
+server/.env
+.logs
+.git
+*.log

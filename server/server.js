@@ -11,6 +11,10 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const errorHandler = require("./middleware/errorHandler");
 
+// DEMO_MODE=1 runs the whole API from an in-memory store (no MongoDB).
+// Useful for a public preview deployment: nothing to provision, nothing to seed.
+const DEMO_MODE = process.env.DEMO_MODE === "1" || process.env.DEMO_MODE === "true";
+
 const authRoutes = require("./routes/authRoutes");
 const listingRoutes = require("./routes/listingRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -19,7 +23,10 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const tripRoutes = require("./routes/tripRoutes");
 
-connectDB();
+const demo = DEMO_MODE ? require("./demo/routes") : null;
+
+if (!DEMO_MODE) connectDB();
+else console.log("DEMO_MODE on — using the in-memory demo store (no database)");
 
 const app = express();
 
@@ -35,8 +42,11 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
 app.use(
   cors({
     origin: (origin, cb) => {
-      // Same-origin / curl / server-to-server requests have no Origin header
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+      // Same-origin / curl / server-to-server requests have no Origin header.
+      // In DEMO_MODE any *.vercel.app origin is also accepted so a fresh
+      // deployment works without touching environment variables.
+      const isVercel = DEMO_MODE && origin && /\.vercel\.app$/.test(origin);
+      if (!origin || isVercel || allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
         return cb(null, true);
       }
       return cb(new Error(`CORS: ${origin} is not allowed`));
@@ -61,7 +71,11 @@ app.use("/api", apiLimiter);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/api/health", (req, res) => {
-  res.status(200).json({ success: true, message: "Wanderlust API is running" });
+  res.status(200).json({
+    success: true,
+    message: "Wanderlust API is running",
+    mode: DEMO_MODE ? "demo" : "database",
+  });
 });
 
 // Friendly root so opening http://localhost:8080 in a browser isn't a 404
@@ -72,17 +86,18 @@ app.get("/", (req, res) => {
     version: "2.0.0",
     health: "/api/health",
     docs: "See README.md — /api/auth, /api/listings, /api/bookings, /api/users, /api/reviews",
+    mode: DEMO_MODE ? "demo" : "database",
     client: process.env.CLIENT_URL || "http://localhost:5173",
   });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/listings", listingRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/reviews", reviewRoutes);
-app.use("/api/trips", tripRoutes);
+app.use("/api/auth", demo ? demo.authRouter() : authRoutes);
+app.use("/api/listings", demo ? demo.listingRouter() : listingRoutes);
+app.use("/api/users", demo ? demo.userRouter() : userRoutes);
+app.use("/api/bookings", demo ? demo.bookingRouter() : bookingRoutes);
+app.use("/api/notifications", demo ? demo.notificationRouter() : notificationRoutes);
+app.use("/api/reviews", demo ? demo.reviewRouter() : reviewRoutes);
+app.use("/api/trips", demo ? demo.tripRouter() : tripRoutes);
 
 app.use((req, res, next) => {
   res.status(404).json({ success: false, message: "Route not found" });
@@ -91,22 +106,30 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 8080;
-const server = app.listen(PORT, () => {
-  console.log(`Wanderlust API listening on port ${PORT}`);
-});
 
-// Never let a stray promise rejection or thrown error kill the API.
-// Log it, and keep the process alive so the frontend never sees a dead backend.
-process.on("unhandledRejection", (reason) => {
-  console.error("[unhandledRejection]", reason);
-});
-process.on("uncaughtException", (err) => {
-  console.error("[uncaughtException]", err);
-});
+// On Vercel (serverless) the app is exported instead of listening on a port.
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  const server = app.listen(PORT, () => {
+    console.log(`Wanderlust API listening on port ${PORT}`);
+  });
 
-const shutdown = (signal) => {
-  console.log(`${signal} received, closing server...`);
-  server.close(() => process.exit(0));
-};
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+  // Never let a stray promise rejection or thrown error kill the API.
+  // Log it, and keep the process alive so the frontend never sees a dead backend.
+  process.on("unhandledRejection", (reason) => {
+    console.error("[unhandledRejection]", reason);
+  });
+  process.on("uncaughtException", (err) => {
+    console.error("[uncaughtException]", err);
+  });
+
+  const shutdown = (signal) => {
+    console.log(`${signal} received, closing server...`);
+    server.close(() => process.exit(0));
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+module.exports = app;
